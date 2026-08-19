@@ -133,7 +133,7 @@ ColumnLimit:     120
 CommentPragmas:  '^ IWYU pragma:'
 CompactNamespaces: false
 ConstructorInitializerIndentWidth: 4
-ContinuationIndentWidth: 3
+ContinuationIndentWidth: 2
 Cpp11BracedListStyle: true
 DerivePointerAlignment: false
 DisableFormat:   false
@@ -206,7 +206,7 @@ IndentExternBlock: AfterExternBlock
 IndentGotoLabels: true
 IndentPPDirectives: None
 IndentRequiresClause: true
-IndentWidth:     3
+IndentWidth:     2
 IndentWrappedFunctionNames: false
 InsertBraces:    false
 InsertNewlineAtEOF: false
@@ -313,7 +313,7 @@ StatementMacros:
   - Q_UNUSED
   - QT_REQUIRE_VERSION
 TableGenBreakInsideDAGArg: DontBreak
-TabWidth:        3
+TabWidth:        2
 UseTab:          Never
 VerilogBreakBetweenInstancePorts: true
 WhitespaceSensitiveMacros:
