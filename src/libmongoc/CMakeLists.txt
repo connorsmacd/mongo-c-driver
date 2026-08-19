@@ -1295,6 +1295,10 @@ if (ENABLE_EXAMPLES AND ENABLE_SHARED)
    mongoc_add_example (mongoc-tail ${PROJECT_SOURCE_DIR}/examples/mongoc-tail.c)
    mongoc_add_example (example-collection-command ${PROJECT_SOURCE_DIR}/examples/example-collection-command.c)
    mongoc_add_example (example-bulkwrite ${PROJECT_SOURCE_DIR}/examples/example-bulkwrite.c)
+   if (NOT WIN32)
+      # Uses POSIX `usleep` and `rand_r`.
+      mongoc_add_example (example-overload-error-handling ${PROJECT_SOURCE_DIR}/examples/example-overload-error-handling.c)
+   endif ()
 
    # examples/aggregation/
    mongoc_add_example (aggregation1 ${PROJECT_SOURCE_DIR}/examples/aggregation/aggregation1.c)
