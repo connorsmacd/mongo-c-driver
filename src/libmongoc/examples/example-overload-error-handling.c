@@ -44,16 +44,31 @@ is_system_overloaded_error(const bson_t *error_reply)
 
 // Step 2: Implement operation "retry" logic using exponential backoff and jitter
 
-const double BASE_BACKOFF_MS = 100;
-const double MAX_BACKOFF_MS = 10000;
+const double BASE_BACKOFF_MS = 100.0;
+const double MAX_BACKOFF_MS = 10000.0;
 const int MAX_ATTEMPTS_DEFAULT = 2;
 
 static double
-calculate_exponential_backoff(int attempt)
+calculate_exponential_backoff(int attempt, double base_backoff_ms)
 {
   unsigned int *seed = get_seed();
   double rand01 = rand_r(seed) / (double)RAND_MAX;
-  return rand01 * BSON_MIN(MAX_BACKOFF_MS, BASE_BACKOFF_MS * pow(2, attempt - 1));
+  return rand01 * BSON_MIN(MAX_BACKOFF_MS, base_backoff_ms * pow(2, attempt));
+}
+
+// get_base_backoff returns the base backoff to apply for an overload error. A server may attach a positive
+// `baseBackoffMS` to the error to replace the default base backoff.
+static double
+get_base_backoff(const bson_t *error_reply)
+{
+  bson_iter_t iter;
+  if (bson_iter_init_find(&iter, error_reply, "baseBackoffMS") && BSON_ITER_HOLDS_INT(&iter)) {
+    int64_t base_backoff_ms = bson_iter_as_int64(&iter);
+    if (base_backoff_ms > 0) {
+      return (double)base_backoff_ms;
+    }
+  }
+  return BASE_BACKOFF_MS;
 }
 
 // retryable_fn returns false and sets `error_reply` on error.
@@ -62,23 +77,29 @@ typedef bool (*retryable_fn)(void *ctx, bson_t *error_reply);
 static bool
 execute_with_retries(retryable_fn fn, void *ctx, int max_attempts)
 {
+  double base_backoff_ms = BASE_BACKOFF_MS;
+
   for (int attempt = 0; attempt < max_attempts; attempt++) {
     bool is_retry = attempt > 0;
 
     if (is_retry) {
-      double delay = calculate_exponential_backoff(attempt);
+      double delay = calculate_exponential_backoff(attempt, base_backoff_ms);
       usleep((useconds_t)(delay * 1000)); // Convert ms to microseconds
     }
 
     bson_t error_reply = BSON_INITIALIZER;
     bool ok = fn(ctx, &error_reply);
     if (ok) {
+      bson_destroy(&error_reply);
       return true;
     } else {
       bool is_retryable_overload_error =
         is_system_overloaded_error(&error_reply) && mongoc_error_has_label(&error_reply, retryable_error_label);
-      is_retryable_overload_error = true;
       bool can_retry = is_retryable_overload_error && attempt + 1 < max_attempts;
+
+      // Apply the server-requested base backoff, if any, to the next attempt's delay.
+      base_backoff_ms = get_base_backoff(&error_reply);
+      bson_destroy(&error_reply);
 
       if (!can_retry) {
         return false;
@@ -107,6 +128,7 @@ do_find(void *ctx, bson_t *error_reply)
   const bson_t *error_reply_local;
   if (mongoc_cursor_error_document(cursor, NULL, &error_reply_local)) {
     if (error_reply) {
+      bson_destroy(error_reply);
       bson_copy_to(error_reply_local, error_reply);
     }
     mongoc_cursor_destroy(cursor);
@@ -114,11 +136,12 @@ do_find(void *ctx, bson_t *error_reply)
   }
 
   mongoc_cursor_destroy(cursor);
+  bson_destroy(&filter);
   return true;
 }
 
 int
-main()
+main(void)
 {
   mongoc_init();
 
